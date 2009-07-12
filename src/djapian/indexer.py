@@ -7,7 +7,7 @@ from djapian.signals import post_save, pre_delete
 from django.conf import settings
 from django.utils.encoding import smart_unicode
 
-from djapian.resultset import ResultSet
+from djapian.resultset import ResultSet, ResultRelatedSet
 from djapian import utils, decider
 
 import xapian
@@ -289,6 +289,10 @@ class Indexer(object):
 
     def search(self, query):
         return ResultSet(self, query)
+ 
+    def related(self, hits):
+        return ResultRelatedSet(self, hits)
+
 
     def delete(self, obj, database=None):
         """
@@ -333,11 +337,48 @@ class Indexer(object):
             start += 1
         return start
 
+                
     def _create_uid(self, obj):
         """
         Generates document UID for given object
         """
         return "UID-" + "-".join(map(smart_unicode, self._get_meta_values(obj)))
+
+
+
+
+    def _do_related(self, matches):
+       """
+       Fetches documents related to original set searched  for
+       """
+       database = self._db.open()
+       enquire = xapian.Enquire(database)
+       rdocs = xapian.RSet()
+       count = len(matches)
+       if count < 10:
+           count = 10
+       if  count > 40:
+           count = 40
+       for match in matches:
+           rdocs.add_document(match.get_docid())
+       terms = enquire.get_eset(count, rdocs)
+       qterms = set([term.term for term in terms])
+       query = []
+       #print qterms
+       for term in qterms:
+           if term.islower():
+               query.append(term)
+           else:
+               for tag in self.tags:
+                   tag = tag.get_tag()
+                   if term.startswith(tag):
+                       term = term[len(tag):]
+                       query.append(term)
+               
+       query = set(query)
+       print query
+       return ' OR '.join(query)
+                           
 
     def _do_search(self, query, offset, limit, order_by, flags, stemming_lang,
                     filter, exclude):
@@ -380,6 +421,9 @@ class Indexer(object):
             None,
             decider
         ), query, query_parser
+      
+  
+
 
     def _get_stem_language(self, obj=None):
         """

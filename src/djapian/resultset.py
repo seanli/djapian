@@ -21,6 +21,7 @@ class ResultSet(object):
                  filter=None, exclude=None, prefetch_select_related=False):
         self._indexer = indexer
         self._query_str = query_str
+        print self._query_str
         self._offset = offset
         self._limit = limit
         self._order_by = order_by
@@ -194,9 +195,8 @@ class ResultSet(object):
 
             tags = dict([(tag.prefix, tag.extract(doc))\
                                 for tag in self._indexer.tags])
-
             self._resultset_cache.append(
-                Hit(pk, model, percent, rank, weight, tags)
+                Hit(pk, model, match,  percent, rank, weight, tags)
             )
 
         if self._prefetch:
@@ -241,10 +241,22 @@ class ResultSet(object):
         def __unicode__(self):
             return "<ResultSet: query=%s prefetch=%s>" % (self.query_str, self._prefetch)
 
+class ResultRelatedSet(ResultSet):
+    def __init__(self, indexer, hits, offset=0, limit=utils.DEFAULT_MAX_RESULTS,
+                 order_by=None, prefetch=False, flags=None, stemming_lang=None,
+                 filter=None, exclude=None, prefetch_select_related=False):
+        matches = [ hit.msetitem for hit in hits]
+        query = indexer._do_related(matches)
+        ResultSet.__init__(self, indexer, query, offset, limit,
+                 order_by, prefetch, flags, stemming_lang,
+                 filter, exclude, prefetch_select_related)
+        print self.count()
+
 class Hit(object):
-    def __init__(self, pk, model, percent, rank, weight, tags):
+    def __init__(self, pk, model, msetitem, percent, rank, weight, tags):
         self.pk = pk
         self.model = model
+        self.msetitem = msetitem
         self.percent = percent
         self.rank = rank
         self.weight = weight
